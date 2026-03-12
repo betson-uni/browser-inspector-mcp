@@ -12,16 +12,13 @@ import {
   ListToolsRequestSchema,
 } from "@modelcontextprotocol/sdk/types.js";
 
-import { GET_DOM_TOOL, getDom } from "./tools/get-dom.js";
-import { INSPECT_STYLES_TOOL, inspectStyles } from "./tools/inspect-styles.js";
-import { SCREENSHOT_ELEMENT_TOOL, screenshotElement } from "./tools/screenshot-element.js";
-import { DIFF_STYLES_TOOL, diffStyles } from "./tools/diff-styles.js";
+import { BROWSER_INSPECT_TOOL, browserInspect } from "./tools/browser-inspect.js";
 import { closeBrowser } from "./browser.js";
 
 const server = new Server(
   {
     name: "browser-inspector-mcp",
-    version: "0.1.0",
+    version: "2.0.0",
   },
   {
     capabilities: {
@@ -32,7 +29,7 @@ const server = new Server(
 
 // Register tools
 server.setRequestHandler(ListToolsRequestSchema, async () => ({
-  tools: [GET_DOM_TOOL, INSPECT_STYLES_TOOL, SCREENSHOT_ELEMENT_TOOL, DIFF_STYLES_TOOL],
+  tools: [BROWSER_INSPECT_TOOL],
 }));
 
 // Handle tool calls
@@ -40,34 +37,31 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
   const { name, arguments: args } = request.params;
 
   try {
-    let result;
-
-    if (name === "get_dom") {
-      result = await getDom(args);
-    } else if (name === "inspect_styles") {
-      result = await inspectStyles(args);
-    } else if (name === "screenshot_element") {
-      result = await screenshotElement(args);
-      // Return image content if we got one, otherwise fall through to text (error/not-found cases)
-      if (result.image) {
-        return {
-          content: [
-            {
-              type: "text",
-              text: JSON.stringify({ selector: result.selector, found: result.found, url: result.url, dimensions: result.dimensions }, null, 2),
-            },
-            {
-              type: "image",
-              data: result.image,
-              mimeType: "image/png",
-            },
-          ],
-        };
-      }
-    } else if (name === "diff_styles") {
-      result = await diffStyles(args);
-    } else {
+    if (name !== "browser_inspect") {
       throw new Error(`Unknown tool: ${name}`);
+    }
+
+    const result = await browserInspect(args);
+
+    // screenshot action returns an image — send it inline so Claude sees it
+    if (result.image) {
+      return {
+        content: [
+          {
+            type: "text",
+            text: JSON.stringify(
+              { selector: result.selector, found: result.found, url: result.url, dimensions: result.dimensions },
+              null,
+              2
+            ),
+          },
+          {
+            type: "image",
+            data: result.image,
+            mimeType: "image/png",
+          },
+        ],
+      };
     }
 
     return {
