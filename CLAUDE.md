@@ -33,9 +33,9 @@ The core problem: AI reads source files. Browsers render something different. Ev
 | Problem validated | Done — 5 documented real incidents across 2 sessions |
 | Landscape research | Done — gap confirmed, one low-adoption partial solution exists |
 | Philosophy + approach | Done — see sessions.md 2026-03-11 |
-| Phase 1 spec | In progress |
-| Phase 1 build | Done — `get_dom` verified, `inspect_styles` bug fixed, needs restart to confirm |
-| v1 shipped | Not started |
+| Phase 1 spec | Done |
+| Phase 1 build | Done — all 4 tools verified live |
+| v1 shipped | ✅ Done — npm, GitHub, GitHub Pages, cold install verified |
 | Case study | Not started |
 
 ---

@@ -1,6 +1,6 @@
 {
   "name": "browser-inspector-mcp",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "description": "MCP server that gives AI coding tools the same CSS visibility a human has in browser DevTools",
   "type": "module",
   "main": "index.js",
@@ -11,7 +11,8 @@
     "index.js",
     "browser.js",
     "tools/",
-    "bin/"
+    "bin/",
+    "LICENSE"
   ],
   "scripts": {
     "start": "node index.js"

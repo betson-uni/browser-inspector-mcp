@@ -380,6 +380,66 @@ Idea: build a `sync_viewport` tool that spins up a local HTTP server, returns a 
 
 ---
 
+### 2026-03-12 — Shipped v1.0.0
+
+**What happened this session:**
+
+Picked up from Phase 1 complete. Decision was to polish and ship before any further improvements. Full session was prep-to-publish.
+
+**README rewrite:**
+Full rewrite covering all 4 tools. Structured as two collapsible sections: TLDR (for techies) and Teach Me (for beginners). Added all the before-you-start prerequisites that the original assumed: Node.js, what an AI coding tool is, what localhost means, what MCP is, how to edit a JSON file, tool-specific config steps for Claude Code / Cursor / Windsurf / Cline / Cursor / OpenCode / Codex. Embedded troubleshooting in place (the step people miss, the file that might not exist, etc.).
+
+**Voice reference — fellow designer's guide:**
+User shared https://figma-guide-toec.vercel.app/ — a setup guide written by a fellow designer that helped them get from zero to Claude Code. Key insight: it works because of psychological safety first, peer voice over authority voice, and documenting real failures alongside successes. "It's just a text window. It can't hurt you. Probably." This voice was carried into the "New to this?" tab. Saved to memory for future writing on this project.
+
+**GitHub Pages site built** (`docs/index.html`):
+Single-page site. Instrument Serif + Instrument Sans, off-white background, faint CSS grid with radial fog overlay (fixed position, fades grid toward viewport center). Dark mode default, follows system preference, manual toggle. All decisions:
+- Analogies as food/recipe metaphor — shown by default with "show me another example" expand for the second
+- Two tabs: Quick start / New to this?
+- Copy button auto-injected on every code block via JS
+- No nav bar, no footer clutter, one purpose per section
+- Pure HTML/CSS/JS — no frameworks, no dependencies
+
+**package.json updates:**
+- Version bumped to 1.0.0
+- Added `bin`, `files`, `keywords`, `license`, `repository`, `engines`
+- GitHub Actions workflow for auto-publish on version bump (`.github/workflows/publish.yml`)
+
+**npm publish — issues hit and resolved:**
+
+1. Not logged in → `npm login` then `npm publish`
+2. `bin` entry flagged by npm — `./index.js` rejected. Fix: created `bin/cli.js` (shebang + `import '../index.js'`) and pointed bin there. `npm pkg fix` also normalized the path from `./bin/cli.js` to `bin/cli.js`.
+3. 2FA / granular token 403 — granular token requires "bypass 2FA" toggled on. Initially advised against this, which was wrong — corrected. Even with bypass on, `npm publish --token` syntax didn't work in npm v11 (token treated as package name). `NPM_TOKEN=token npm publish` also didn't work (env var not read by default). Fix: `npm config set //registry.npmjs.org/:_authToken TOKEN` writes to `~/.npmrc` where npm actually looks for auth. Publish succeeded after this.
+
+**Shipped:**
+- npm: `browser-inspector-mcp@1.0.0` live at npmjs.com
+- GitHub: `github.com/betson-uni/browser-inspector-mcp`
+- GitHub Pages: `betson-uni.github.io/browser-inspector-mcp`
+- GitHub Actions: auto-publish on version bump configured
+
+**Open source / attribution:**
+MIT license in package.json but no `LICENSE` file yet — needs to be added so attribution is formally in place. MIT means anyone can use/copy/modify/distribute but must include the original copyright notice. Without a LICENSE file the copyright notice has no name on it.
+
+**Next session priorities:**
+1. Test `npx -y browser-inspector-mcp` cold to verify the published package works end to end
+2. Add `LICENSE` file with name
+3. Submit to MCP directories (see below)
+4. Decide: Phase 2 vs case study first
+
+---
+
+### 2026-03-12 — Post-ship verification: npx install works
+
+**Context:** First session after v1.0.0 published to npm. Goal: test the package the way a stranger would.
+
+**Tested:** `npx -y browser-inspector-mcp` — ran without errors. MCP server launched and connected to Claude Code. All four tools appeared in the deferred tool list.
+
+**Result:** Publish is clean. Cold install works. v1 is live and functional end to end.
+
+**Status:** Shipped and verified. Next priorities: add LICENSE file, submit to MCP directories, decide Phase 2 vs case study.
+
+---
+
 ## Incident Archive — Inspector as Source of Truth
 
 > Three incidents from a single real session. Not random bugs — a documented pattern.
