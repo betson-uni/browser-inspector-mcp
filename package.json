@@ -5,12 +5,13 @@
   "type": "module",
   "main": "index.js",
   "bin": {
-    "browser-inspector-mcp": "./index.js"
+    "browser-inspector-mcp": "bin/cli.js"
   },
   "files": [
     "index.js",
     "browser.js",
-    "tools/"
+    "tools/",
+    "bin/"
   ],
   "scripts": {
     "start": "node index.js"
@@ -28,7 +29,7 @@
   "license": "MIT",
   "repository": {
     "type": "git",
-    "url": "https://github.com/betson-uni/browser-inspector-mcp.git"
+    "url": "git+https://github.com/betson-uni/browser-inspector-mcp.git"
   },
   "engines": {
     "node": ">=18"
