@@ -1,0 +1,766 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="dark">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>browser-inspector-mcp</title>
+  <meta name="description" content="Gives your AI coding tool the same CSS visibility you have in browser DevTools. Rendered class names, the full cascade, what's winning and why.">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Instrument+Sans:ital,wght@0,400;0,500;0,600;1,400&family=Instrument+Serif:ital@0;1&display=swap" rel="stylesheet">
+  <style>
+    *, *::before, *::after {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+    }
+
+    /* ─── Tokens ─── */
+
+    :root {
+      --bg:        #F7F6F2;
+      --text:      #1C1C1A;
+      --muted:     #6A6A64;
+      --faint:     #9E9E98;
+      --border:    rgba(0, 0, 0, 0.10);
+      --grid:      rgba(0, 0, 0, 0.05);
+      --code-bg:   rgba(0, 0, 0, 0.07);
+      --code-text: #1C1C1A;
+      --fog:       rgba(247, 246, 242, 0.78);
+    }
+
+    [data-theme="dark"] {
+      --bg:        #131311;
+      --text:      #ECEAE4;
+      --muted:     #888880;
+      --faint:     #555550;
+      --border:    rgba(255, 255, 255, 0.09);
+      --grid:      rgba(255, 255, 255, 0.045);
+      --code-bg:   rgba(255, 255, 255, 0.08);
+      --code-text: #D4D2CC;
+      --fog:       rgba(19, 19, 17, 0.78);
+    }
+
+    @media (prefers-color-scheme: dark) {
+      :root:not([data-theme="light"]) {
+        --bg:        #131311;
+        --text:      #ECEAE4;
+        --muted:     #888880;
+        --faint:     #555550;
+        --border:    rgba(255, 255, 255, 0.09);
+        --grid:      rgba(255, 255, 255, 0.045);
+        --code-bg:   rgba(255, 255, 255, 0.08);
+        --code-text: #D4D2CC;
+        --fog:       rgba(19, 19, 17, 0.78);
+      }
+    }
+
+    /* ─── Base ─── */
+
+    html {
+      background: var(--bg);
+      color: var(--text);
+      font-family: 'Instrument Sans', sans-serif;
+      font-size: 16px;
+      -webkit-font-smoothing: antialiased;
+    }
+
+    /* Grid background */
+    body {
+      min-height: 100vh;
+      position: relative;
+      background-color: var(--bg);
+      background-image:
+        linear-gradient(var(--grid) 1px, transparent 1px),
+        linear-gradient(90deg, var(--grid) 1px, transparent 1px);
+      background-size: 28px 28px;
+    }
+
+    /* Fog layer — fades grid toward center */
+    body::before {
+      content: '';
+      position: fixed;
+      inset: 0;
+      background: radial-gradient(ellipse 130% 130% at 50% 45%,
+        var(--fog) 25%,
+        transparent 90%
+      );
+      pointer-events: none;
+      z-index: 0;
+    }
+
+    .page {
+      position: relative;
+      z-index: 1;
+      max-width: 700px;
+      margin: 0 auto;
+      padding: 56px 32px 128px;
+    }
+
+    /* ─── Header ─── */
+
+    .site-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 100px;
+    }
+
+    .site-name {
+      font-family: 'Instrument Serif', serif;
+      font-size: 1rem;
+      font-weight: 400;
+      color: var(--text);
+      letter-spacing: -0.01em;
+    }
+
+    .site-header-right {
+      display: flex;
+      align-items: center;
+      gap: 20px;
+    }
+
+    .site-links {
+      display: flex;
+      gap: 20px;
+    }
+
+    .site-links a {
+      font-size: 0.82rem;
+      color: var(--muted);
+      text-decoration: none;
+    }
+
+    .site-links a:hover {
+      color: var(--text);
+    }
+
+    .theme-toggle {
+      background: none;
+      border: 1px solid var(--border);
+      border-radius: 20px;
+      padding: 3px 10px;
+      font-family: inherit;
+      font-size: 0.75rem;
+      color: var(--muted);
+      cursor: pointer;
+      transition: color 0.15s, border-color 0.15s;
+      line-height: 1.6;
+    }
+
+    .theme-toggle:hover {
+      color: var(--text);
+      border-color: var(--faint);
+    }
+
+    /* ─── Hero ─── */
+
+    .hero {
+      margin-bottom: 96px;
+    }
+
+    .hero-title {
+      font-family: 'Instrument Serif', serif;
+      font-size: clamp(2.2rem, 5.5vw, 3.2rem);
+      font-weight: 400;
+      line-height: 1.12;
+      letter-spacing: -0.025em;
+      margin-bottom: 24px;
+      color: var(--text);
+    }
+
+    .hero-title em {
+      font-style: italic;
+    }
+
+    .hero-sub {
+      font-size: 1.075rem;
+      color: var(--muted);
+      line-height: 1.65;
+      max-width: 520px;
+    }
+
+    /* ─── Sections ─── */
+
+    section {
+      margin-bottom: 88px;
+    }
+
+    .label {
+      font-size: 0.7rem;
+      font-weight: 600;
+      letter-spacing: 0.12em;
+      text-transform: uppercase;
+      color: var(--muted);
+      margin-bottom: 24px;
+    }
+
+    p {
+      font-size: 1.025rem;
+      line-height: 1.7;
+      color: var(--text);
+      margin-bottom: 16px;
+    }
+
+    p:last-child {
+      margin-bottom: 0;
+    }
+
+    /* ─── Analogy ─── */
+
+    .analogy {
+      border-left: 1.5px solid var(--border);
+      padding-left: 24px;
+      margin: 32px 0 6px;
+    }
+
+    .analogy p {
+      color: var(--muted);
+      font-size: 0.975rem;
+      font-style: italic;
+      line-height: 1.7;
+      margin-bottom: 12px;
+    }
+
+    .analogy p:last-child {
+      font-style: normal;
+      font-weight: 500;
+      color: var(--text);
+      margin-bottom: 0;
+    }
+
+    .show-more {
+      background: none;
+      border: none;
+      font-family: inherit;
+      font-size: 0.85rem;
+      color: var(--faint);
+      cursor: pointer;
+      padding: 0;
+      margin-top: 16px;
+      text-decoration: underline;
+      text-underline-offset: 3px;
+      text-decoration-color: var(--border);
+      display: block;
+      transition: color 0.15s;
+    }
+
+    .show-more:hover {
+      color: var(--muted);
+    }
+
+    .analogy-extra {
+      display: none;
+      margin-top: 4px;
+    }
+
+    .analogy-extra.open {
+      display: block;
+    }
+
+    /* ─── Tools list ─── */
+
+    .tools {
+      list-style: none;
+    }
+
+    .tools li {
+      display: grid;
+      grid-template-columns: 164px 1fr;
+      gap: 24px;
+      padding: 18px 0;
+      border-bottom: 1px solid var(--border);
+      align-items: baseline;
+    }
+
+    .tools li:first-child {
+      border-top: 1px solid var(--border);
+    }
+
+    .tool-name {
+      font-family: 'SF Mono', 'Fira Code', 'Fira Mono', monospace;
+      font-size: 0.82rem;
+      font-weight: 500;
+      color: var(--text);
+      letter-spacing: -0.01em;
+    }
+
+    .tool-desc {
+      font-size: 0.975rem;
+      color: var(--muted);
+      line-height: 1.6;
+    }
+
+    /* ─── Tabs ─── */
+
+    .tabs {
+      display: flex;
+      border-bottom: 1px solid var(--border);
+      margin-bottom: 40px;
+    }
+
+    .tab {
+      background: none;
+      border: none;
+      border-bottom: 2px solid transparent;
+      padding: 10px 0;
+      margin-right: 30px;
+      margin-bottom: -1px;
+      font-family: inherit;
+      font-size: 0.925rem;
+      font-weight: 500;
+      color: var(--muted);
+      cursor: pointer;
+      transition: color 0.15s;
+      white-space: nowrap;
+    }
+
+    .tab:hover { color: var(--text); }
+
+    .tab.active {
+      color: var(--text);
+      border-bottom-color: var(--text);
+    }
+
+    .panel { display: none; }
+    .panel.active { display: block; }
+
+    /* ─── Code ─── */
+
+    pre {
+      background: var(--code-bg);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 20px 22px;
+      overflow-x: auto;
+      margin: 18px 0;
+      position: relative;
+    }
+
+    pre code {
+      font-family: 'SF Mono', 'Fira Code', 'Fira Mono', monospace;
+      font-size: 0.82rem;
+      line-height: 1.7;
+      color: var(--code-text);
+    }
+
+    p code, li code {
+      font-family: 'SF Mono', 'Fira Code', 'Fira Mono', monospace;
+      font-size: 0.84em;
+      background: var(--code-bg);
+      color: var(--code-text);
+      padding: 2px 6px;
+      border-radius: 4px;
+    }
+
+    .copy-btn {
+      position: absolute;
+      top: 11px;
+      right: 11px;
+      background: var(--bg);
+      border: 1px solid var(--border);
+      border-radius: 4px;
+      padding: 3px 10px;
+      font-family: inherit;
+      font-size: 0.74rem;
+      color: var(--muted);
+      cursor: pointer;
+      transition: color 0.15s;
+    }
+
+    .copy-btn:hover { color: var(--text); }
+    .copy-btn.copied { color: var(--text); }
+
+    /* ─── Quick start ─── */
+
+    .config-locations {
+      list-style: none;
+      margin: 4px 0 22px;
+    }
+
+    .config-locations li {
+      font-size: 0.925rem;
+      color: var(--muted);
+      padding: 10px 0;
+      border-bottom: 1px solid var(--border);
+      display: grid;
+      grid-template-columns: 116px 1fr;
+      gap: 16px;
+      align-items: baseline;
+    }
+
+    .config-locations li:first-child {
+      border-top: 1px solid var(--border);
+    }
+
+    .config-tool-name {
+      font-size: 0.85rem;
+      font-weight: 600;
+      color: var(--text);
+    }
+
+    /* ─── New to this ─── */
+
+    .step {
+      margin-bottom: 44px;
+    }
+
+    .step-title {
+      font-size: 1rem;
+      font-weight: 600;
+      color: var(--text);
+      margin-bottom: 12px;
+    }
+
+    .step p {
+      font-size: 0.975rem;
+      color: var(--muted);
+      margin-bottom: 12px;
+      line-height: 1.68;
+    }
+
+    .step p strong {
+      color: var(--text);
+      font-weight: 600;
+    }
+
+    .aside {
+      font-size: 0.85rem !important;
+      color: var(--faint) !important;
+      font-style: italic;
+      margin-top: 6px !important;
+    }
+
+    .tool-options {
+      list-style: none;
+      margin: 12px 0;
+    }
+
+    .tool-options li {
+      font-size: 0.975rem;
+      color: var(--muted);
+      padding: 11px 0;
+      border-bottom: 1px solid var(--border);
+      line-height: 1.55;
+    }
+
+    .tool-options li:first-child {
+      border-top: 1px solid var(--border);
+    }
+
+    .tool-options strong {
+      color: var(--text);
+      font-weight: 600;
+    }
+
+    .tool-options a {
+      color: var(--muted);
+      text-decoration: underline;
+      text-underline-offset: 2px;
+    }
+
+    .divider {
+      border: none;
+      border-top: 1px solid var(--border);
+      margin: 40px 0;
+    }
+
+    .restart-note {
+      font-size: 1rem;
+      font-weight: 600;
+      color: var(--text);
+      margin-bottom: 8px;
+    }
+
+    /* ─── Footer ─── */
+
+    .site-footer {
+      margin-top: 100px;
+      padding-top: 24px;
+      border-top: 1px solid var(--border);
+      display: flex;
+      gap: 28px;
+    }
+
+    .site-footer a {
+      font-size: 0.82rem;
+      color: var(--faint);
+      text-decoration: none;
+    }
+
+    .site-footer a:hover { color: var(--muted); }
+
+    /* ─── Mobile ─── */
+
+    @media (max-width: 560px) {
+      .page { padding: 40px 20px 80px; }
+      .site-header { margin-bottom: 72px; }
+      .hero { margin-bottom: 72px; }
+
+      .tools li {
+        grid-template-columns: 1fr;
+        gap: 6px;
+      }
+
+      .config-locations li {
+        grid-template-columns: 1fr;
+        gap: 4px;
+      }
+    }
+  </style>
+</head>
+<body>
+  <div class="page">
+
+    <!-- Header -->
+    <header class="site-header">
+      <span class="site-name">browser-inspector-mcp</span>
+      <div class="site-header-right">
+        <nav class="site-links">
+          <a href="https://github.com/betson-uni/browser-inspector-mcp">GitHub</a>
+          <a href="https://npmjs.com/package/browser-inspector-mcp">npm</a>
+        </nav>
+        <button class="theme-toggle" onclick="toggleTheme(this)" aria-label="Toggle dark mode">light</button>
+      </div>
+    </header>
+
+    <!-- Hero -->
+    <div class="hero">
+      <h1 class="hero-title">Before your AI writes CSS,<br>let it <em>see</em> the browser.</h1>
+      <p class="hero-sub">The same CSS visibility you get in DevTools — rendered class names, the full cascade, what's winning and why — available to your AI automatically.</p>
+    </div>
+
+    <!-- Problem -->
+    <section>
+      <div class="label">The problem</div>
+      <p>You ask your AI to fix a styling issue. It reads the source files, writes a change, applies it. You check the browser. Still wrong. A few more rounds. Eventually you open DevTools yourself, copy the element, paste it back into the chat — and only then does the AI understand what it was working with.</p>
+      <p>Modern component libraries generate their own class names at runtime. Your JSX says <code>&lt;Menu&gt;</code>. The browser renders <code>ant-dropdown-menu-item-container</code>. The AI writes CSS for what it found in the source. The rule never applies.</p>
+
+      <div class="analogy">
+        <p>Reading the recipe isn't the same as tasting the dish. You hand a chef a recipe. They follow it precisely — every measurement, every step. But the kitchen has changed since it was written. New ingredients, different technique. The dish comes out wrong. The chef re-reads the recipe. Still wrong.</p>
+        <p>What they needed to do was taste it first.</p>
+        <p>The inspector is the tasting step. Before adding more seasoning, you put the spoon to your lips.</p>
+      </div>
+
+      <button class="show-more" id="show-more-btn" onclick="toggleAnalogy(this)">Show me another example</button>
+
+      <div class="analogy-extra" id="analogy-extra">
+        <div class="analogy">
+          <p>Every adjustment is a round trip. You're seasoning from the next room. Someone else is tasting, shouting back "needs more salt." You add some, wait. "Still needs more." Back to the stove. You're holding the spoon but you can't taste the food yourself.</p>
+          <p>That round trip is you, walking to the browser and back after every change. This tool closes the loop.</p>
+        </div>
+      </div>
+    </section>
+
+    <!-- Tools -->
+    <section>
+      <div class="label">Four tools</div>
+      <ul class="tools">
+        <li>
+          <span class="tool-name">get_dom</span>
+          <span class="tool-desc">Real rendered HTML — actual runtime class names and DOM structure — before the AI writes any CSS.</span>
+        </li>
+        <li>
+          <span class="tool-name">inspect_styles</span>
+          <span class="tool-desc">Full CSS cascade: every matched rule, where it came from, and which properties are active vs overridden.</span>
+        </li>
+        <li>
+          <span class="tool-name">diff_styles</span>
+          <span class="tool-desc">Before/after style comparison. Shows exactly what changed after a CSS edit — or confirms nothing changed at all.</span>
+        </li>
+        <li>
+          <span class="tool-name">screenshot_element</span>
+          <span class="tool-desc">Cropped visual snapshot of any element, returned inline so the AI can see it.</span>
+        </li>
+      </ul>
+    </section>
+
+    <!-- Get started -->
+    <section>
+      <div class="label">Get started</div>
+
+      <div class="tabs">
+        <button class="tab active" onclick="switchTab(this, 'quick')">Quick start</button>
+        <button class="tab" onclick="switchTab(this, 'guide')">New to this?</button>
+      </div>
+
+      <!-- Quick start -->
+      <div class="panel active" id="panel-quick">
+        <p>Add to your AI tool's MCP config file and restart.</p>
+
+        <pre><code id="config-code">{
+  "mcpServers": {
+    "browser-inspector": {
+      "command": "npx",
+      "args": ["-y", "browser-inspector-mcp"]
+    }
+  }
+}</code></pre>
+
+        <ul class="config-locations">
+          <li>
+            <span class="config-tool-name">Claude Code</span>
+            <code>~/.claude.json</code>
+          </li>
+          <li>
+            <span class="config-tool-name">Cursor</span>
+            <span>Settings → MCP, or <code>~/.cursor/mcp.json</code></span>
+          </li>
+          <li>
+            <span class="config-tool-name">Windsurf</span>
+            <code>~/.codeium/windsurf/mcp_config.json</code>
+          </li>
+          <li>
+            <span class="config-tool-name">Others</span>
+            <span>Any MCP-compatible client — same config block</span>
+          </li>
+        </ul>
+
+        <p>First call, pass your dev server URL. The session stays open for the rest of the conversation.</p>
+        <p>On first use, Puppeteer downloads Chromium (~170MB).</p>
+      </div>
+
+      <!-- New to this -->
+      <div class="panel" id="panel-guide">
+
+        <p>If you're reading this tab, you're probably where I was not long ago — you've seen people demo AI coding tools, thought "I want that," and then hit a wall of setup steps that assume you already know what you're doing.</p>
+        <p>There are only three things you need before this works. You might already have some of them without knowing it.</p>
+
+        <hr class="divider">
+
+        <div class="step">
+          <div class="step-title">Do you have Node.js?</div>
+          <p>Node.js is what actually runs this tool on your computer. You don't need to know anything else about it.</p>
+          <p>Open Terminal on Mac (Cmd+Space → type "Terminal") or Command Prompt on Windows, and type:</p>
+          <pre><code>node --version</code></pre>
+          <p>If a number comes back — like <code>v20.11.0</code> — you have it, skip ahead. If you get an error, go to <strong>nodejs.org</strong>, download the version that says "Recommended for most users," run the installer, and come back.</p>
+          <p class="aside">Never opened Terminal before? It's just a text window. It can't hurt anything.</p>
+        </div>
+
+        <div class="step">
+          <div class="step-title">Do you have an AI coding tool?</div>
+          <p>This is the thing you type into when asking AI to write or fix code. This tool works with all of these:</p>
+          <ul class="tool-options">
+            <li><strong>Cursor</strong> — easiest starting point if you're coming from design. Like a code editor with AI built in. <a href="https://cursor.com" target="_blank">cursor.com</a></li>
+            <li><strong>Claude Code</strong> — runs in your Terminal. More minimal.</li>
+            <li><strong>Windsurf, Cline, Continue</strong> — all work the same way with this tool.</li>
+          </ul>
+          <p style="margin-top: 14px;">If you don't have one yet, start with Cursor.</p>
+        </div>
+
+        <div class="step">
+          <div class="step-title">Do you have a project running locally?</div>
+          <p>This tool needs something to look at — a web project running on your computer, the kind that opens at an address like <code>http://localhost:3000</code>. That's what you'll point it at.</p>
+          <p>If you don't have that yet, get a project running first and come back.</p>
+        </div>
+
+        <hr class="divider">
+
+        <div class="step">
+          <div class="step-title">Add the config</div>
+          <p>You're going to add a small block of text to a config file for your AI tool. It looks scarier than it is — it's just a structured text file.</p>
+
+          <p><strong>Cursor</strong> — go to Settings → MCP inside Cursor. There's a UI to add a new server directly, no file editing needed.</p>
+          <p class="aside">Don't see MCP in Settings? Your Cursor might need an update.</p>
+
+          <p style="margin-top: 18px;"><strong>Claude Code</strong> — open Terminal and run:</p>
+          <pre><code>open -e ~/.claude.json</code></pre>
+          <p>If it says the file doesn't exist, create a blank one in TextEdit and save it as <code>.claude.json</code> in your home folder (the folder with your name in Finder). Then paste this inside it:</p>
+
+          <pre><code>{
+  "mcpServers": {
+    "browser-inspector": {
+      "command": "npx",
+      "args": ["-y", "browser-inspector-mcp"]
+    }
+  }
+}</code></pre>
+          <p class="aside">Already have other things in that file? Add just the <code>"browser-inspector"</code> block inside the existing <code>"mcpServers"</code> section. Don't replace what's already there.</p>
+
+          <p style="margin-top: 18px;"><strong>Windsurf</strong> — open <code>~/.codeium/windsurf/mcp_config.json</code> and add the same block above.</p>
+        </div>
+
+        <hr class="divider">
+
+        <p class="restart-note">Restart your AI tool.</p>
+        <p>Fully close it and reopen it. This is the step people miss — the config only loads on startup.</p>
+
+        <hr class="divider">
+
+        <div class="step">
+          <div class="step-title">First use</div>
+          <p>Just tell your AI what you're working on and where it's running:</p>
+          <pre><code>I'm looking at the dashboard at http://localhost:5173 —
+the button styles aren't applying correctly.</code></pre>
+          <p>The tools show up automatically — you don't call them by name. The first time it runs it downloads a small browser in the background (~170MB). That's normal, just let it finish. After that, it's instant.</p>
+        </div>
+
+      </div>
+    </section>
+
+    <!-- Footer -->
+    <footer class="site-footer">
+      <a href="https://github.com/betson-uni/browser-inspector-mcp">GitHub</a>
+      <a href="https://npmjs.com/package/browser-inspector-mcp">npm</a>
+      <a href="https://github.com/betson-uni/browser-inspector-mcp/blob/main/README.md">Full docs</a>
+    </footer>
+
+  </div>
+
+  <script>
+    // ─── Tab switching ───
+    function switchTab(btn, name) {
+      document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+      document.querySelectorAll('.panel').forEach(p => p.classList.remove('active'));
+      btn.classList.add('active');
+      document.getElementById('panel-' + name).classList.add('active');
+    }
+
+    // ─── Analogy expand ───
+    function toggleAnalogy(btn) {
+      const extra = document.getElementById('analogy-extra');
+      const open = extra.classList.toggle('open');
+      btn.textContent = open ? 'Show less' : 'Show me another example';
+    }
+
+    // ─── Copy code blocks ───
+    function copyCode(btn) {
+      const code = btn.previousElementSibling.textContent;
+      navigator.clipboard.writeText(code).then(() => {
+        btn.textContent = 'copied';
+        btn.classList.add('copied');
+        setTimeout(() => {
+          btn.textContent = 'copy';
+          btn.classList.remove('copied');
+        }, 2000);
+      });
+    }
+
+    // Inject copy button into every pre block
+    document.querySelectorAll('pre').forEach(pre => {
+      const btn = document.createElement('button');
+      btn.className = 'copy-btn';
+      btn.textContent = 'copy';
+      btn.setAttribute('onclick', 'copyCode(this)');
+      pre.appendChild(btn);
+    });
+
+    // ─── Theme toggle ───
+    function toggleTheme(btn) {
+      const html = document.documentElement;
+      const isDark = html.getAttribute('data-theme') === 'dark';
+      html.setAttribute('data-theme', isDark ? 'light' : 'dark');
+      btn.textContent = isDark ? 'dark' : 'light';
+    }
+
+    // Follow system preference on load; dark is default fallback
+    (function () {
+      const prefersDark = !window.matchMedia('(prefers-color-scheme: light)').matches;
+      const theme = prefersDark ? 'dark' : 'light';
+      document.documentElement.setAttribute('data-theme', theme);
+      const btn = document.querySelector('.theme-toggle');
+      if (btn) btn.textContent = prefersDark ? 'light' : 'dark';
+    })();
+  </script>
+</body>
+</html>
