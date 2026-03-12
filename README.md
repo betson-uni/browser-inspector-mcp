@@ -32,9 +32,9 @@ Config file locations:
 - Windsurf: `~/.codeium/windsurf/mcp_config.json`
 - Others: wherever your tool reads MCP server config
 
-Restart your AI tool. First call, pass your dev server URL: `get_dom("body", url="http://localhost:5173")`. Browser session persists for the rest of the session.
+Restart your AI tool. First call, tell your AI what URL your dev server is running on — the browser session persists for the rest of the conversation.
 
-Four tools: `get_dom` (rendered DOM before writing CSS), `inspect_styles` (full cascade when something isn't applying), `diff_styles` (before/after verification), `screenshot_element` (visual snapshot).
+One tool, four actions: `browser_inspect` with `action: "dom"` (rendered DOM), `"styles"` (full CSS cascade), `"diff"` (before/after verification), `"screenshot"` (visual snapshot). Or just describe what you need — Claude picks the right action.
 
 On first use, Puppeteer downloads Chromium (~170MB).
 
@@ -203,9 +203,9 @@ The AI will use the tools it needs. The browser session stays open for the whole
 ```
 You:  "The icon in the panel header isn't picking up the brand color"
 
-AI:   → get_dom(".panel-header")
+AI:   → browser_inspect(action="dom", selector=".panel-header")
         sees the real rendered class names, finds the icon is <span class="panel__header-icon">
-      → inspect_styles(".panel__header-icon", properties=["color"])
+      → browser_inspect(action="styles", selector=".panel__header-icon", properties=["color"])
         sees there's an explicit color rule on the icon overriding the parent
       → fixes the right rule, first try
 ```
@@ -272,31 +272,31 @@ The AI looks at text that appears bold in a screenshot. It assumes `font-weight`
 
 ---
 
-## The four tools
+## One tool, four actions
 
-### `get_dom` — See what the browser actually built
+### `dom` — See what the browser actually built
 
 Before the AI writes any CSS, it calls this. Returns the real rendered HTML — actual runtime class names, actual DOM structure — for any element you point it at.
 
 This is the fitting room. The AI checks what was actually built before touching it.
 
-### `inspect_styles` — See every CSS rule and who's winning
+### `styles` — See every CSS rule and who's winning
 
 When a style change isn't showing up, this returns the full CSS cascade for an element: every rule that matched, in order, where it came from (stylesheet + line number), and which properties are active vs overridden.
 
 The AI can see whether your rule even reached the element, whether something is overriding it, and exactly where the winning rule is defined.
 
-### `diff_styles` — Confirm a change actually landed
+### `diff` — Confirm a change actually landed
 
 Before/after style comparison. First call saves a snapshot. Second call — after a CSS change — shows exactly which properties changed and by how much. If nothing changed, it says so explicitly.
 
 This is how the AI knows its fix worked without you checking the browser manually.
 
-### `screenshot_element` — Visual snapshot of any element
+### `screenshot` — Visual snapshot of any element
 
 Returns a cropped screenshot of any element. The AI receives the image inline and can see what it's working with.
 
-> **Note on screenshot accuracy:** Screenshots render at 1440×900 in a headless browser. If your app has responsive breakpoints, the screenshot may not match what you see in your own browser at your current window size. The CSS data tools (`get_dom`, `inspect_styles`, `diff_styles`) are unaffected — they return accurate data regardless of viewport.
+> **Note on screenshot accuracy:** Screenshots render at 1440×900 in a headless browser. If your app has responsive breakpoints, the screenshot may not match what you see in your own browser at your current window size. The CSS data actions (`dom`, `styles`, `diff`) are unaffected — they return accurate data regardless of viewport.
 
 ---
 
