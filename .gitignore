@@ -1,3 +1,10 @@
 node_modules/
 .DS_Store
 *.log
+
+# Internal — not for public repo
+CLAUDE.md
+sessions.md
+thinking.md
+spec.md
+testing.md
