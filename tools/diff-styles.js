@@ -12,6 +12,7 @@
  */
 
 import { getBrowser, getCDPSession } from "../browser.js";
+import { noChangesMessage } from "./error-guidance.js";
 
 export const DIFF_STYLES_TOOL = {
   name: "diff_styles",
@@ -187,7 +188,7 @@ export async function diffStyles({ selector, url, viewport, reset }) {
     unchanged_count: allKeys.size - changed.length,
     message:
       changed.length === 0
-        ? `No computed style changes detected on "${selector}". The CSS change may not have applied — check specificity with inspect_styles.`
+        ? noChangesMessage()
         : `${changed.length} propert${changed.length === 1 ? "y" : "ies"} changed on "${selector}".`,
   };
 }

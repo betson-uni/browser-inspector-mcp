@@ -9,6 +9,7 @@
  */
 
 import { getBrowser, getCDPSession } from "../browser.js";
+import { notFoundMessage, emptyRulesMessage } from "./error-guidance.js";
 
 export const INSPECT_STYLES_TOOL = {
   name: "inspect_styles",
@@ -48,7 +49,7 @@ export const INSPECT_STYLES_TOOL = {
 };
 
 // Layout-critical properties fetched for ancestor elements.
-// These are the rules that commonly constrain a child — overflow, sizing, flex context.
+// Covers sizing/overflow constraints + stacking context signals.
 const ANCESTOR_COMPUTED_PROPERTIES = [
   "display",
   "position",
@@ -66,6 +67,11 @@ const ANCESTOR_COMPUTED_PROPERTIES = [
   "justify-content",
   "flex",
   "transform",
+  // Stacking context signals — added v2.2.0
+  "z-index",
+  "filter",
+  "isolation",
+  "will-change",
 ];
 
 // Computed properties we always return unless caller filters to something specific
@@ -110,10 +116,11 @@ export async function inspectStyles({ selector, url, viewport, properties }) {
   // Find the element
   const element = await page.$(selector);
   if (!element) {
+    const hasIframes = await page.$$eval("iframe", (frames) => frames.length > 0).catch(() => false);
     return {
       selector,
       found: false,
-      message: `No element matched selector "${selector}" on ${page.url()}. Try get_dom first to verify the rendered class names.`,
+      message: notFoundMessage(selector, page.url(), hasIframes),
     };
   }
 
@@ -215,24 +222,60 @@ export async function inspectStyles({ selector, url, viewport, properties }) {
     let current = el.parentElement;
     let depth = 0;
     while (current && current.tagName && current !== document.documentElement && depth < 4) {
-      const computed = window.getComputedStyle(current);
+      const cs = window.getComputedStyle(current);
       const styles = {};
       for (const prop of props) {
-        const val = computed.getPropertyValue(prop).trim();
+        const val = cs.getPropertyValue(prop).trim();
         if (val) styles[prop] = val;
       }
+
+      // Detect stacking context formation — determines z-index layering behaviour.
+      // An ancestor that creates a stacking context may cause z-index issues on descendants.
+      const pos = styles["position"] || "static";
+      const zIndex = styles["z-index"] || "auto";
+      const opacity = parseFloat(styles["opacity"] ?? "1");
+      const transform = styles["transform"] || "none";
+      const filter = styles["filter"] || "none";
+      const isolation = styles["isolation"] || "auto";
+      const willChange = styles["will-change"] || "auto";
+      const STACKING_WILL_CHANGE = ["transform", "opacity", "filter", "top", "left", "right", "bottom"];
+
+      const createsStackingContext = (
+        pos === "fixed" ||
+        pos === "sticky" ||
+        (["relative", "absolute", "fixed", "sticky"].includes(pos) && zIndex !== "auto") ||
+        opacity < 1 ||
+        transform !== "none" ||
+        filter !== "none" ||
+        isolation === "isolate" ||
+        STACKING_WILL_CHANGE.some((p) => willChange.includes(p))
+      );
+
       const tag = current.tagName.toLowerCase();
       const label = current.id
         ? `#${current.id}`
         : current.classList.length
         ? `${tag}.${current.classList[0]}`
         : tag;
-      results.push({ label, computed: styles });
+
+      const entry = { label, computed: styles };
+      if (createsStackingContext) entry.createsStackingContext = true;
+      results.push(entry);
+
       current = current.parentElement;
       depth++;
     }
     return results;
   }, selector, ANCESTOR_COMPUTED_PROPERTIES);
+
+  // Detect CSS-in-JS usage on this page — blob: or anonymous stylesheets are the signal
+  let hasCSSInJS = false;
+  if (matchedRules.length === 0) {
+    const styleSheetInfos = await cdp.send("CSS.getAllStyleSheets").catch(() => ({ headers: [] }));
+    hasCSSInJS = (styleSheetInfos.headers || []).some(
+      (h) => h.sourceURL?.includes("blob:") || h.sourceURL?.includes("<anonymous>") || !h.sourceURL
+    );
+  }
 
   return {
     selector,
@@ -242,10 +285,7 @@ export async function inspectStyles({ selector, url, viewport, properties }) {
     inlineStyles: inlineProperties.length > 0 ? inlineProperties : null,
     matchedRules,
     ancestors: ancestors.length > 0 ? ancestors : null,
-    note:
-      matchedRules.length === 0
-        ? "No matched CSS rules found. The element may only have user-agent styles."
-        : null,
+    note: matchedRules.length === 0 ? emptyRulesMessage(hasCSSInJS) : null,
   };
 }
 

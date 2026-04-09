@@ -6,6 +6,7 @@
  */
 
 import { getBrowser } from "../browser.js";
+import { notFoundMessage } from "./error-guidance.js";
 
 export const GET_DOM_TOOL = {
   name: "get_dom",
@@ -45,10 +46,12 @@ export async function getDom({ selector, url, viewport }) {
   // Check element exists
   const element = await page.$(selector);
   if (!element) {
+    // Detect iframes on the page — element may be inside one
+    const hasIframes = await page.$$eval("iframe", (frames) => frames.length > 0).catch(() => false);
     return {
       selector,
       found: false,
-      message: `No element matched selector "${selector}" on ${page.url()}. Check the selector or try get_dom on a parent element first to see the actual class names.`,
+      message: notFoundMessage(selector, page.url(), hasIframes),
     };
   }
 

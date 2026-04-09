@@ -2,7 +2,7 @@
 
 **Gives your AI coding tool the same CSS visibility you have in browser DevTools.**
 
-Before your AI writes CSS, let it see what's actually in the browser — the real rendered class names, the full cascade of rules, what's winning and why. Same data a human gets from DevTools. Zero manual copy-paste.
+A debugging primitive, not a testing tool — no test runner, no pass/fail. Before your AI writes CSS, let it see what's actually in the browser — the real rendered class names, the full cascade of rules, what's winning and why. Same data a human gets from DevTools. Zero manual copy-paste. When something doesn't work, the tool explains why and points toward the likely cause.
 
 **[Full docs and visuals →](https://betson-g.github.io/browser-inspector-mcp)**
 
@@ -319,6 +319,8 @@ Returns a cropped screenshot of any element. The AI receives the image inline an
 - Node.js 18 or higher — [nodejs.org](https://nodejs.org)
 - An MCP-compatible AI coding tool (Claude Code, Cursor, Windsurf, Cline, Continue, OpenCode, Codex, or any other)
 - A web project running locally that you want to inspect
+
+Works with any CSS approach — tested against Tailwind JIT, CSS Modules (Next.js), and Emotion.
 
 ---
 

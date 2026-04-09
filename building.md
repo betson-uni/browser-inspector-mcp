@@ -154,13 +154,20 @@ The true ground truth approach is connecting to the user's *existing* browser ta
 
 ---
 
+## What shipped
+
+- **SSL certificate support** — v2.0.2. Headless Chrome now accepts self-signed certificates, so local dev setups running over HTTPS work without configuration.
+- **Ancestor chain analysis** — v2.1.0. The `styles` action walks up to 4 levels of the DOM and returns layout-critical computed styles (overflow, display, sizing, flex context) for each ancestor. Addresses the case where the element looks fine in isolation but a parent has `overflow: hidden` or `width: 0` constraining it.
+
 ## What's next
 
-- **SSL certificate support** — fixed in v2.0.2. Headless Chrome now accepts self-signed certificates, so local dev setups running over HTTPS (e.g. `https://localhost`) work without any extra configuration.
-- **Ancestor chain analysis** — added in v2.1.0. The `styles` action now walks up to 4 levels up the DOM and returns layout-critical computed styles (overflow, display, sizing, flex context) for each ancestor. Addresses a real debugging pattern: the element looks fine in isolation, but a parent has `overflow: hidden` or `width: 0` constraining it. Validated independently by two external users.
-- **Phase 2 — connect to user's real browser.** Two options: `--remote-debugging-port` (user launches Chrome with a flag) or a browser extension relay (one-time install, then always-on). The extension model is the stronger long-term play.
-- **Live style injection** — AI writes directly to the browser, you see the change instantly, source file only gets touched once the result is confirmed.
-- **Browser extension handoff** — drag-to-select any element in your browser, send the visual + DOM + styles to your AI session in one gesture.
+Approach: build only when there's a demonstrated need. The tool is in the wild — waiting for real user signals before adding features.
+
+- **Cross-framework testing** — verifying `styles` and `dom` work correctly against Tailwind JIT, CSS Modules, and Emotion before pushing for wider adoption. If anything breaks on common stacks, fix it first.
+- **Stacking context in ancestor chain** — the `styles` action surfaces overflow and sizing from ancestors but doesn't flag stacking context formation (which determines z-index layering). A targeted addition, not a new feature.
+- **Connect to user's real browser** — `--remote-debugging-port` optional mode, or a browser extension relay. Zero-setup stays the default. On hold until someone specifically asks for it.
+- **Browser extension handoff** — drag-to-select any element in your browser, capture visual + DOM + styles, send to AI in one gesture. Has one explicit external validation. Waiting for more signal before building.
+- **Portal and shadow DOM support** — component library elements that render outside their parent (dropdowns, modals, tooltips). On hold until reported.
 
 ---
 
