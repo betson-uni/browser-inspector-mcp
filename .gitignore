@@ -2,6 +2,15 @@ node_modules/
 .DS_Store
 *.log
 
+# Credentials / secrets
+.env
+.env.*
+*.key
+*.pem
+*.cert
+*.p12
+*.pfx
+
 # Internal — all .md files ignored by default (universal Sandbox rule)
 # Exceptions: README.md (public) and building.md (committed docs)
 *.md
