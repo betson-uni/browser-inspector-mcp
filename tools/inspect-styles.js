@@ -8,7 +8,7 @@
  * Styles panel shows: every rule that matched, which won, where it came from.
  */
 
-import { getBrowser, getCDPSession } from "../browser.js";
+import { resolvePage, getCDPSession } from "../browser.js";
 import { notFoundMessage, emptyRulesMessage } from "./error-guidance.js";
 
 export const INSPECT_STYLES_TOOL = {
@@ -109,9 +109,9 @@ const DEFAULT_COMPUTED_PROPERTIES = [
   "box-sizing",
 ];
 
-export async function inspectStyles({ selector, url, viewport, properties }) {
-  const { page } = await getBrowser(url, viewport);
-  const cdp = await getCDPSession();
+export async function inspectStyles({ selector, url, viewport, properties, openInNewTab }) {
+  const { page, mode, warning } = await resolvePage({ url, viewport, openInNewTab });
+  const cdp = await getCDPSession(page);
 
   // Find the element
   const element = await page.$(selector);
@@ -120,6 +120,8 @@ export async function inspectStyles({ selector, url, viewport, properties }) {
     return {
       selector,
       found: false,
+      mode,
+      ...(warning ? { warning } : {}),
       message: notFoundMessage(selector, page.url(), hasIframes),
     };
   }
@@ -137,6 +139,8 @@ export async function inspectStyles({ selector, url, viewport, properties }) {
     return {
       selector,
       found: false,
+      mode,
+      ...(warning ? { warning } : {}),
       message: `Element was found by puppeteer but could not be resolved via CDP DOM.querySelector. Try a simpler selector.`,
     };
   }
@@ -280,6 +284,8 @@ export async function inspectStyles({ selector, url, viewport, properties }) {
   return {
     selector,
     found: true,
+    mode,
+    ...(warning ? { warning } : {}),
     url: page.url(),
     computed,
     inlineStyles: inlineProperties.length > 0 ? inlineProperties : null,

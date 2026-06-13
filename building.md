@@ -146,11 +146,13 @@ One browser, one page, one CDP session per MCP server instance. Browser stays op
 
 ## The ground truth problem
 
-There's a known gap in any tool that launches its own separate browser: what it captures isn't exactly what the user's real browser shows. Playwright has this. Cypress has this. Every CDP-based tool has this.
+Any tool that launches its own separate browser has a built-in gap: what it captures isn't exactly what the user's real browser shows. Playwright has this. Cypress has this. Every CDP-based tool has this.
 
-The specific failure: our headless Chrome at 1440px can land on the wrong side of a responsive breakpoint compared to the user's actual browser. For CSS cascade inspection this barely matters — matched rules, specificity, and source attribution are accurate at any viewport. For screenshots it means the visual is approximate, not exact.
+The specific failure in v2.x: headless Chrome at 1440px can land on the wrong side of a responsive breakpoint compared to the user's actual browser. Worse — and this turned out to be the real problem — a managed browser can't see the state behind a click. Deep routes in SPAs, panels the user has opened, modals mid-interaction, feature-flagged views: all invisible to a tool that loads a URL fresh from nothing.
 
-The true ground truth approach is connecting to the user's *existing* browser tab — same viewport, same state, no synthetic anything. This was rejected for Phase 1 because it requires the user to launch Chrome with a debug flag or install an extension. Zero setup was the priority. Revisiting this in Phase 2 as an optional mode.
+Every real-world testing session logged the same capability gap in different language. It was the thing.
+
+In v3.0 the tool gained an **attached mode**: instead of launching its own headless Chrome, it connects to a real, visible Chrome over the `--remote-debugging-port` flag — real viewport, real client-side route, and you can sign in so it sees authenticated, stateful pages. One hard constraint shaped the final design, and it surfaced the hard way during verification: **since Chrome 136, Chrome refuses to expose the debug port on your normal profile** — a deliberate security measure against malware driving people's logged-in browsers. So attached mode can't hijack your everyday Chrome with its open tabs. It connects to a *dedicated debug Chrome* you launch once with a separate `--user-data-dir` and leave running — your own inspection browser, signed in once. Managed headless stays the zero-setup default and the automatic fallback; attached is the opt-in for when you need the real rendered thing.
 
 ---
 
@@ -158,14 +160,15 @@ The true ground truth approach is connecting to the user's *existing* browser ta
 
 - **SSL certificate support** — v2.0.2. Headless Chrome now accepts self-signed certificates, so local dev setups running over HTTPS work without configuration.
 - **Ancestor chain analysis** — v2.1.0. The `styles` action walks up to 4 levels of the DOM and returns layout-critical computed styles (overflow, display, sizing, flex context) for each ancestor. Addresses the case where the element looks fine in isolation but a parent has `overflow: hidden` or `width: 0` constraining it.
+- **Smart error guidance + stacking context detection + cross-framework verification** — v2.2.0. When the tool can't find an element, it returns an actionable hint based on the selector shape (CSS Modules hash? portal component? iframe?) rather than a generic "not found." The ancestor chain now flags stacking-context formation. Verified clean against Tailwind JIT, CSS Modules (Next.js), and Emotion.
+- **Attached mode** — v3.0.0. The tool can now inspect a real, visible Chrome instead of a headless one: your real viewport, your SPA's current route, authenticated pages you've logged into. Because Chrome 136+ blocks remote debugging on the default profile, attached mode connects to a *dedicated debug Chrome* (`--remote-debugging-port=9222 --user-data-dir=…`) you set up once and leave running — managed headless remains the zero-setup default and automatic fallback. Respects your window's real viewport (never resizes it) and reports which mode each call used. Three env vars (`BROWSER_INSPECTOR_MODE`, `PORT`, `HOST`) for overrides. Also fixes a long-standing `diff` bug where the baseline could quietly go stale if the tab navigated between calls.
 
 ## What's next
 
 Approach: build only when there's a demonstrated need. The tool is in the wild — waiting for real user signals before adding features.
 
-- **Cross-framework testing** — verifying `styles` and `dom` work correctly against Tailwind JIT, CSS Modules, and Emotion before pushing for wider adoption. If anything breaks on common stacks, fix it first.
-- **Stacking context in ancestor chain** — the `styles` action surfaces overflow and sizing from ancestors but doesn't flag stacking context formation (which determines z-index layering). A targeted addition, not a new feature.
-- **Connect to user's real browser** — `--remote-debugging-port` optional mode, or a browser extension relay. Zero-setup stays the default. On hold until someone specifically asks for it.
+- **Interaction primitives** — `click`, `hover`, `type` so the AI can reach interactive states even when you haven't manually set them up. Scoped carefully to stay on the inspection side of the boundary rather than competing with general browser automation tools.
+- **Live style injection** — the obvious next step after attached mode: `set_styles(selector, properties)` writes directly to the live browser via CDP, the source file stays clean until the result is confirmed. The architecture supports it; the read side had to be solid first.
 - **Browser extension handoff** — drag-to-select any element in your browser, capture visual + DOM + styles, send to AI in one gesture. Has one explicit external validation. Waiting for more signal before building.
 - **Portal and shadow DOM support** — component library elements that render outside their parent (dropdowns, modals, tooltips). On hold until reported.
 

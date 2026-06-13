@@ -18,7 +18,7 @@ import { closeBrowser } from "./browser.js";
 const server = new Server(
   {
     name: "browser-inspector-mcp",
-    version: "2.0.0",
+    version: "3.0.0",
   },
   {
     capabilities: {

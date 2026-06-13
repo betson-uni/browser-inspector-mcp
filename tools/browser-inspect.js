@@ -38,12 +38,12 @@ export const BROWSER_INSPECT_TOOL = {
       url: {
         type: "string",
         description:
-          "URL of the running dev server (e.g. 'http://localhost:5173'). Required on the first call. Optional on subsequent calls — reuses the open browser tab.",
+          "URL of the page to inspect. In attached mode (inspecting your own Chrome), this is matched against your open tabs — the closest-matching tab is used, and it falls back to the first user tab with a warning if nothing matches. In managed mode (headless), this is where the tool's internal browser navigates to. Required on the first call.",
       },
       viewport: {
         type: "object",
         description:
-          "Optional: browser viewport size before inspecting (e.g. {\"width\": 375, \"height\": 812} for mobile). Defaults to 1440×900.",
+          "Optional: browser viewport size before inspecting (e.g. {\"width\": 375, \"height\": 812} for mobile). Defaults to 1440×900. Ignored in attached mode — the tool respects your real Chrome window's size.",
         properties: {
           width: { type: "number" },
           height: { type: "number" },
@@ -65,6 +65,11 @@ export const BROWSER_INSPECT_TOOL = {
         type: "boolean",
         description:
           "Optional, 'diff' action only: pass true to discard any existing snapshot and start a fresh baseline.",
+      },
+      openInNewTab: {
+        type: "boolean",
+        description:
+          "Optional, attached mode only: open the given `url` in a new tab instead of matching against existing tabs. Use when you want the tool to set up a specific page without disturbing tabs you already have open.",
       },
     },
     required: ["action"],
@@ -92,7 +97,7 @@ Example: "did my border-radius change actually take effect?"
 **Tip:** When in doubt, start with 'dom' to get the real class names, then use 'styles' to inspect the element you found.`;
 
 export async function browserInspect(args) {
-  const { action, selector, url, viewport, properties, padding, reset } = args;
+  const { action, selector, url, viewport, properties, padding, reset, openInNewTab } = args;
 
   if (action === "help") {
     return { help: HELP_TEXT };
@@ -105,18 +110,18 @@ export async function browserInspect(args) {
   }
 
   if (action === "dom") {
-    return getDom({ selector, url, viewport });
+    return getDom({ selector, url, viewport, openInNewTab });
   }
 
   if (action === "styles") {
-    return inspectStyles({ selector, url, viewport, properties });
+    return inspectStyles({ selector, url, viewport, properties, openInNewTab });
   }
 
   if (action === "screenshot") {
-    return screenshotElement({ selector, url, viewport, padding });
+    return screenshotElement({ selector, url, viewport, padding, openInNewTab });
   }
 
   if (action === "diff") {
-    return diffStyles({ selector, url, viewport, reset });
+    return diffStyles({ selector, url, viewport, reset, openInNewTab });
   }
 }

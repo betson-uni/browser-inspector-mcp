@@ -5,7 +5,7 @@
  * What you see in source is not always what the browser renders.
  */
 
-import { getBrowser } from "../browser.js";
+import { resolvePage } from "../browser.js";
 import { notFoundMessage } from "./error-guidance.js";
 
 export const GET_DOM_TOOL = {
@@ -40,8 +40,8 @@ export const GET_DOM_TOOL = {
   },
 };
 
-export async function getDom({ selector, url, viewport }) {
-  const { page } = await getBrowser(url, viewport);
+export async function getDom({ selector, url, viewport, openInNewTab }) {
+  const { page, mode, warning } = await resolvePage({ url, viewport, openInNewTab });
 
   // Check element exists
   const element = await page.$(selector);
@@ -51,6 +51,8 @@ export async function getDom({ selector, url, viewport }) {
     return {
       selector,
       found: false,
+      mode,
+      ...(warning ? { warning } : {}),
       message: notFoundMessage(selector, page.url(), hasIframes),
     };
   }
@@ -74,6 +76,8 @@ export async function getDom({ selector, url, viewport }) {
   return {
     selector,
     found: true,
+    mode,
+    ...(warning ? { warning } : {}),
     url: page.url(),
     tagName: info.tagName,
     id: info.id,

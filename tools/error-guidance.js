@@ -149,3 +149,77 @@ export function noChangesMessage() {
     suffix
   );
 }
+
+// ─── Attached-mode error helpers ──────────────────────────────────────────────
+
+function platformChromeLaunchHint(port) {
+  const platform = process.platform;
+  if (platform === "darwin") {
+    return `/Applications/Google\\ Chrome.app/Contents/MacOS/Google\\ Chrome --remote-debugging-port=${port}`;
+  }
+  if (platform === "win32") {
+    return `"C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe" --remote-debugging-port=${port}`;
+  }
+  return `google-chrome --remote-debugging-port=${port}   # or: chromium, chromium-browser`;
+}
+
+/**
+ * Build a smart error for "can't reach Chrome on the debug port".
+ * When managedError is provided, both attached and managed failed — append the managed failure.
+ */
+export function chromeDebugPortErrorMessage({ host, port, managedError } = {}) {
+  const category = "chrome-debug-port";
+  const count = trackError(category);
+  const suffix = escalationSuffix(category, count);
+  const launch = platformChromeLaunchHint(port);
+  const debugProfile =
+    process.platform === "win32"
+      ? `${launch} --user-data-dir=%LOCALAPPDATA%\\chrome-debug-profile`
+      : `${launch} --user-data-dir="$HOME/.chrome-debug-profile"`;
+
+  const parts = [
+    `Can't reach Chrome on ${host}:${port}.`,
+    `Launch a dedicated debug Chrome (one-time setup), then leave it running:`,
+    `    ${debugProfile}`,
+    `The --user-data-dir is required: since Chrome 136, the debug port is silently ignored on your normal profile (a security measure), so it only works with a separate profile directory. This opens a dedicated Chrome you sign into once — it stays logged in and persists across restarts.`,
+    `Note: it won't show your main profile's existing tabs — Chrome doesn't allow debugging that profile. Treat it as your dedicated "inspect this" browser. Use a stable path, not /tmp (which opens blank every time).`,
+    `Escape hatch: set BROWSER_INSPECTOR_MODE=managed in your MCP config to use an internal headless Chrome instead — zero setup, headless.`,
+  ];
+
+  if (managedError) {
+    parts.push(
+      `Managed fallback also failed: ${managedError}`,
+      `Try: npx puppeteer browsers install chrome`
+    );
+  }
+
+  return parts.join("\n\n") + suffix;
+}
+
+/**
+ * Build an error message for when a diff baseline's URL no longer matches the tab's current URL.
+ */
+export function diffStaleUrlMessage({ baselineUrl, currentUrl }) {
+  const category = "diff-stale-url";
+  const count = trackError(category);
+  const suffix = escalationSuffix(category, count);
+  return (
+    `Baseline was captured on ${baselineUrl}, but the tab is now on ${currentUrl}. ` +
+    `Navigate back to the baseline URL, or call diff again with reset: true to start a new baseline here.` +
+    suffix
+  );
+}
+
+/**
+ * Build an error message for when the tab holding a diff baseline was closed.
+ */
+export function diffTabClosedMessage({ baselineUrl }) {
+  const category = "diff-tab-closed";
+  const count = trackError(category);
+  const suffix = escalationSuffix(category, count);
+  return (
+    `The tab that held the baseline (${baselineUrl}) was closed. ` +
+    `Re-open the page and call diff again with reset: true to start a new baseline.` +
+    suffix
+  );
+}

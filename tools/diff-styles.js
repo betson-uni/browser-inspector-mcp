@@ -4,15 +4,19 @@
  * Closes the feedback loop. Call once before making a CSS change (saves
  * a baseline), then again after (returns what changed).
  *
- * First call  → saves baseline, confirms what was captured
- * Second call → diffs current styles against baseline, shows what changed
+ * Snapshots are keyed by selector+URL so the baseline is tied to the page
+ * it was captured on. If the user navigates between baseline and diff, we
+ * surface an explicit error instead of returning nonsense.
  *
- * Snapshots are stored in memory per selector. After a diff is returned,
- * the snapshot is cleared — ready for the next round.
+ * Baselines older than 10 minutes are discarded.
  */
 
-import { getBrowser, getCDPSession } from "../browser.js";
-import { noChangesMessage } from "./error-guidance.js";
+import { resolvePage, getCDPSession } from "../browser.js";
+import {
+  noChangesMessage,
+  diffStaleUrlMessage,
+  diffTabClosedMessage,
+} from "./error-guidance.js";
 
 export const DIFF_STYLES_TOOL = {
   name: "diff_styles",
@@ -49,10 +53,26 @@ export const DIFF_STYLES_TOOL = {
   },
 };
 
-// In-memory snapshots keyed by selector
+// In-memory snapshots keyed by `${selector}::${normalizedUrl}`
 const snapshots = new Map();
+const STALENESS_MS = 10 * 60 * 1000; // 10 minutes
 
-// Properties we track for diffs — the same set inspect_styles uses by default
+function normalizeForKey(rawUrl) {
+  try {
+    const u = new URL(rawUrl);
+    let pathname = u.pathname || "/";
+    if (pathname.length > 1 && pathname.endsWith("/")) pathname = pathname.slice(0, -1);
+    return u.origin.toLowerCase() + pathname;
+  } catch {
+    return rawUrl || "";
+  }
+}
+
+function snapshotKey(selector, pageUrl) {
+  return `${selector}::${normalizeForKey(pageUrl)}`;
+}
+
+// Properties we track for diffs — same set inspect_styles uses by default
 const TRACKED_PROPERTIES = [
   "display",
   "position",
@@ -106,13 +126,10 @@ const TRACKED_PROPERTIES = [
   "cursor",
 ];
 
-async function getComputedStyles(selector, url, viewport) {
-  const { page } = await getBrowser(url, viewport);
-  const cdp = await getCDPSession();
-
+async function readComputedStyles(page, cdp, selector) {
   const element = await page.$(selector);
   if (!element) {
-    return { found: false, url: page.url() };
+    return { found: false };
   }
 
   const { root } = await cdp.send("DOM.getDocument", { pierce: true });
@@ -122,7 +139,7 @@ async function getComputedStyles(selector, url, viewport) {
   });
 
   if (!nodeId) {
-    return { found: false, url: page.url() };
+    return { found: false };
   }
 
   const { computedStyle } = await cdp.send("CSS.getComputedStyleForNode", { nodeId });
@@ -134,46 +151,97 @@ async function getComputedStyles(selector, url, viewport) {
     }
   }
 
-  return { found: true, url: page.url(), styles };
+  return { found: true, styles };
 }
 
-export async function diffStyles({ selector, url, viewport, reset }) {
+// Find any snapshot for this selector regardless of URL — used to detect
+// URL drift and emit a clear error rather than treating the new URL as
+// a fresh baseline.
+function findAnySnapshotForSelector(selector) {
+  const prefix = `${selector}::`;
+  for (const [key, value] of snapshots) {
+    if (key.startsWith(prefix)) return { key, value };
+  }
+  return null;
+}
+
+function isStale(snapshot) {
+  return Date.now() - snapshot.capturedAt > STALENESS_MS;
+}
+
+export async function diffStyles({ selector, url, viewport, reset, openInNewTab }) {
   if (reset) {
-    snapshots.delete(selector);
+    // Drop all snapshots for this selector
+    for (const key of [...snapshots.keys()]) {
+      if (key.startsWith(`${selector}::`)) snapshots.delete(key);
+    }
   }
 
-  const current = await getComputedStyles(selector, url, viewport);
+  const { page, mode, warning } = await resolvePage({ url, viewport, openInNewTab });
+  const cdp = await getCDPSession(page);
 
+  const pageUrl = page.url();
+  const key = snapshotKey(selector, pageUrl);
+
+  // Check for a stale baseline on a different URL before doing any work
+  const existing = findAnySnapshotForSelector(selector);
+  if (existing && existing.key !== key && !isStale(existing.value)) {
+    return {
+      selector,
+      status: "stale_url",
+      mode,
+      ...(warning ? { warning } : {}),
+      message: diffStaleUrlMessage({
+        baselineUrl: existing.value.url,
+        currentUrl: pageUrl,
+      }),
+    };
+  }
+
+  // If the stored baseline is stale, discard it so we capture fresh
+  if (existing && isStale(existing.value)) {
+    snapshots.delete(existing.key);
+  }
+
+  const current = await readComputedStyles(page, cdp, selector);
   if (!current.found) {
     return {
       selector,
       found: false,
-      message: `No element matched selector "${selector}" on ${current.url}. Try get_dom first to verify the rendered class names.`,
+      mode,
+      ...(warning ? { warning } : {}),
+      message: `No element matched selector "${selector}" on ${pageUrl}. Try get_dom first to verify the rendered class names.`,
     };
   }
 
   // No snapshot yet — save this as the baseline
-  if (!snapshots.has(selector)) {
-    snapshots.set(selector, current.styles);
+  if (!snapshots.has(key)) {
+    snapshots.set(key, {
+      url: pageUrl,
+      capturedAt: Date.now(),
+      computed: current.styles,
+    });
     return {
       selector,
       status: "snapshot_saved",
-      url: current.url,
-      message: `Baseline saved for "${selector}". Make your CSS change, then call diff_styles again to see what changed.`,
+      mode,
+      ...(warning ? { warning } : {}),
+      url: pageUrl,
+      message: `Baseline saved for "${selector}" on ${pageUrl}. Make your CSS change, then call diff_styles again to see what changed.`,
       captured_properties: Object.keys(current.styles).length,
       snapshot: current.styles,
     };
   }
 
   // Snapshot exists — diff against it
-  const baseline = snapshots.get(selector);
-  snapshots.delete(selector); // clear after use, ready for next round
+  const baseline = snapshots.get(key);
+  snapshots.delete(key); // clear after use, ready for next round
 
   const changed = [];
-  const allKeys = new Set([...Object.keys(baseline), ...Object.keys(current.styles)]);
+  const allKeys = new Set([...Object.keys(baseline.computed), ...Object.keys(current.styles)]);
 
   for (const prop of allKeys) {
-    const before = baseline[prop] ?? "(not set)";
+    const before = baseline.computed[prop] ?? "(not set)";
     const after = current.styles[prop] ?? "(not set)";
     if (before !== after) {
       changed.push({ property: prop, before, after });
@@ -183,7 +251,9 @@ export async function diffStyles({ selector, url, viewport, reset }) {
   return {
     selector,
     status: changed.length > 0 ? "changed" : "no_change",
-    url: current.url,
+    mode,
+    ...(warning ? { warning } : {}),
+    url: pageUrl,
     changed,
     unchanged_count: allKeys.size - changed.length,
     message:
@@ -192,3 +262,6 @@ export async function diffStyles({ selector, url, viewport, reset }) {
         : `${changed.length} propert${changed.length === 1 ? "y" : "ies"} changed on "${selector}".`,
   };
 }
+
+// Re-export for error-guidance consumers that may import from here
+export { diffTabClosedMessage };

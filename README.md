@@ -284,6 +284,53 @@ They're for different jobs. A good workflow: use `claude --chrome` to navigate t
 
 ---
 
+## Which Chrome does the tool use?
+
+The tool runs in one of two modes and picks automatically:
+
+**Managed (zero setup — the default).** Do nothing and the tool launches its own headless Chrome behind the scenes. Great for inspecting any public URL or a local dev server with no configuration at all. Viewport is a fixed 1440×900.
+
+**Attached (opt-in — richer).** The tool connects to a real, visible Chrome you control: your real viewport, your real client-side routes, and you can sign into your app so it inspects authenticated, stateful pages. There's one important catch worth understanding up front:
+
+> **Chrome won't let anything debug your everyday profile.** Since Chrome 136 (a deliberate [security change](https://developer.chrome.com/blog/remote-debugging-port)), the `--remote-debugging-port` flag is ignored unless Chrome is *also* launched with a separate profile directory. So attached mode can't use your main Chrome with your existing tabs — it uses a **dedicated debug Chrome** you set up once. Think of it as a second Chrome that's yours to inspect in: sign into your apps there once and it stays logged in.
+
+Set it up once, leave it running, and the tool connects automatically:
+
+**macOS**
+```bash
+/Applications/Google\ Chrome.app/Contents/MacOS/Google\ Chrome \
+  --remote-debugging-port=9222 \
+  --user-data-dir="$HOME/.chrome-debug-profile"
+```
+
+**Linux**
+```bash
+google-chrome --remote-debugging-port=9222 --user-data-dir="$HOME/.chrome-debug-profile"
+```
+
+**Windows**
+```
+"C:\Program Files\Google\Chrome\Application\chrome.exe" ^
+  --remote-debugging-port=9222 ^
+  --user-data-dir=%LOCALAPPDATA%\chrome-debug-profile
+```
+
+The `--user-data-dir` is **required** — without it, Chrome 136+ silently ignores the debug port and the tool falls back to managed. Use a **stable** path like the one above (a persistent folder), **not `/tmp`**, which gets wiped between runs so the profile opens blank every time. Tip: alias the command so it's one keystroke, and just keep this Chrome open while you work.
+
+The tool tries attached first and falls back to managed if the debug Chrome isn't running — and **every response tells you which mode it used**, so you're never guessing which Chrome you're looking at.
+
+### Environment variables
+
+Set these under your AI tool's MCP config (the `env` block alongside `command` and `args`):
+
+| Variable | Default | What it does |
+|---|---|---|
+| `BROWSER_INSPECTOR_MODE` | `auto` | `auto` tries attached then falls back. `attached` errors out if Chrome isn't reachable on the port. `managed` uses internal headless Chrome only (the v2.x behavior). |
+| `BROWSER_INSPECTOR_PORT` | `9222` | Port to connect to. |
+| `BROWSER_INSPECTOR_HOST` | `127.0.0.1` | Hostname. Rarely needs changing. |
+
+---
+
 ## One tool, four actions
 
 ### `dom` — See what the browser actually built
@@ -310,7 +357,11 @@ This is how the AI knows its fix worked without you checking the browser manuall
 
 Returns a cropped screenshot of any element. The AI receives the image inline and can see what it's working with.
 
-> **Note on screenshot accuracy:** Screenshots render at 1440×900 in a headless browser. If your app has responsive breakpoints, the screenshot may not match what you see in your own browser at your current window size. The CSS data actions (`dom`, `styles`, `diff`) are unaffected — they return accurate data regardless of viewport.
+In attached mode the screenshot reflects exactly what you see — same viewport, same state, same everything. In managed fallback mode the screenshot renders at 1440×900 in a headless browser, so it may not match what you see in your own Chrome at your current window size. The CSS data actions (`dom`, `styles`, `diff`) return accurate data in either mode.
+
+### `openInNewTab` — optional modifier for attached mode
+
+When the tool is attached to your Chrome and you pass a `url` that isn't matched against any open tab, by default it inspects your active tab and adds a warning. If you'd rather have the tool pop a fresh tab for a specific URL — say, a public site you want inspected without touching your current tabs — pass `openInNewTab: true`. Only applies in attached mode; ignored otherwise.
 
 ---
 
@@ -326,8 +377,8 @@ Works with any CSS approach — tested against Tailwind JIT, CSS Modules (Next.j
 
 ## What's coming
 
+- **Interaction primitives** — `click`, `hover`, `type` so the AI can reach interactive states (open menus, focus rings, hover effects) even when you haven't manually set them up in your own browser. Scoped carefully to avoid overlapping with general-purpose browser automation tools.
 - **Live style injection** — AI writes directly to the browser via CDP, you see the change instantly, source file only gets touched once the result is confirmed. No file save or hot reload in the loop.
-- **Browser extension handoff** — drag a rectangle over any element in your browser, it sends the visual + DOM + computed styles directly to your AI session. One gesture replaces the manual copy-paste entirely.
 - **Portal and shadow DOM support** — component library elements that render outside their parent (dropdowns, modals, tooltips).
 
 ---

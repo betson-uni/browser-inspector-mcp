@@ -8,7 +8,7 @@
  * Returns the image directly so Claude can see the result inline.
  */
 
-import { getBrowser } from "../browser.js";
+import { resolvePage } from "../browser.js";
 
 export const SCREENSHOT_ELEMENT_TOOL = {
   name: "screenshot_element",
@@ -46,14 +46,16 @@ export const SCREENSHOT_ELEMENT_TOOL = {
   },
 };
 
-export async function screenshotElement({ selector, url, viewport, padding = 8 }) {
-  const { page } = await getBrowser(url, viewport);
+export async function screenshotElement({ selector, url, viewport, padding = 8, openInNewTab }) {
+  const { page, mode, warning } = await resolvePage({ url, viewport, openInNewTab });
 
   const element = await page.$(selector);
   if (!element) {
     return {
       selector,
       found: false,
+      mode,
+      ...(warning ? { warning } : {}),
       message: `No element matched selector "${selector}" on ${page.url()}. Try get_dom first to verify the rendered class names.`,
     };
   }
@@ -63,6 +65,8 @@ export async function screenshotElement({ selector, url, viewport, padding = 8 }
     return {
       selector,
       found: true,
+      mode,
+      ...(warning ? { warning } : {}),
       message: `Element matched but has no bounding box — it may be hidden (display:none or visibility:hidden).`,
     };
   }
@@ -80,6 +84,8 @@ export async function screenshotElement({ selector, url, viewport, padding = 8 }
   return {
     selector,
     found: true,
+    mode,
+    ...(warning ? { warning } : {}),
     url: page.url(),
     dimensions: {
       width: Math.round(box.width),
