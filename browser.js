@@ -142,9 +142,12 @@ async function connectAttached(host, port) {
 async function launchManaged() {
   return puppeteer.launch({
     headless: true,
+    // Chrome's sandbox is left ENABLED. The --no-sandbox / --disable-setuid-sandbox
+    // flags were removed (2026-06-13) — on a normal desktop the sandbox launches
+    // fine without them, and disabling it is an unnecessary security trade-off.
+    // (--ignore-certificate-errors stays: it lets local dev servers on self-signed
+    // HTTPS be inspected; unrelated to the process sandbox.)
     args: [
-      "--no-sandbox",
-      "--disable-setuid-sandbox",
       "--ignore-certificate-errors",
     ],
   });
