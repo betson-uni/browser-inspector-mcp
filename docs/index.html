@@ -866,7 +866,7 @@
           <span class="ac-chevron">▾</span>
         </div>
         <div class="ac-body">
-          <div class="ac-row"><div class="ac-row-label">Returns</div><div class="ac-row-val">A cropped screenshot of the matched element. Rendered at 1440×900 — may not match your viewport at other sizes.</div></div>
+          <div class="ac-row"><div class="ac-row-label">Returns</div><div class="ac-row-val">A cropped screenshot of the matched element. In managed mode it renders at 1440×900; in attached mode it reflects your real Chrome window's viewport.</div></div>
           <div class="ac-row"><div class="ac-row-label">Use when</div><div class="ac-row-val">You want the AI to see what an element looks like, not just its computed values.</div></div>
           <div class="ac-row"><div class="ac-row-label">Example</div><div class="ac-row-val"><code>action: "screenshot", selector: "#modal-overlay"</code></div></div>
         </div>
@@ -925,6 +925,13 @@
     </section>
 
     <!-- Get started -->
+    <!-- Modes -->
+    <section>
+      <div class="label">Two modes</div>
+      <p><strong>Managed</strong> — the default, zero setup. The tool runs its own headless Chrome in the background (that's the Quick Start below). Point it at any URL or your local dev server and it just works. Renders at 1440×900.</p>
+      <p><strong>Attached</strong> — optional, for when you need the real thing. The tool connects to a Chrome you control — your actual viewport, your SPA's current route, pages you've signed into. One-time setup: launch Chrome with a debug port on a dedicated profile. Since Chrome 136, the debug port only works on a separate profile, not your everyday one — so it's a second Chrome that's yours to inspect in, not your main window. The tool auto-detects it and quietly falls back to managed if it isn't running. <a href="https://github.com/betson-g/browser-inspector-mcp#which-chrome-does-the-tool-use">Setup commands →</a></p>
+    </section>
+
     <section id="get-started">
       <div class="label">Get started</div>
 
